@@ -8,7 +8,6 @@ pub fn address_decode_test() {
   let address = "5Gv8YYFu8H1btvmrJy9FjjAWfb99wrhV3uhPFoNEr918utyR"
   let hex_address =
     "2AD6A3105D6768E956E9E5D41050AC29843F98561410D3A47F9DD5B3B227AB87464204"
-  let expected_prefix = 42
 
   address.from_string(address)
   |> should.be_ok

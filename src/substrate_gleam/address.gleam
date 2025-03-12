@@ -1,17 +1,34 @@
 import gleam/bit_array
 import gleam/bool
+import gleam/dict
 import gleam/result
 import substrate_gleam/internal/crypto
 
-const expected_address_byte_length = 35
-
-const expected_address_checksum_suffix_byte_length = 2
-
-const expected_address_prefix_byte_length = 1
-
-const expected_address_pubkey_byte_length = 32
-
 const checksum_context_prefix = <<"SS58PRE">>
+
+// See https://develop--substrate-docs.netlify.app/v3/advanced/ss58/#address-formats-for-substrate
+const valid_addresses_formats_by_total_length = [
+  #(3, AddressFormat(1, 1, 1)),
+  #(4, AddressFormat(1, 2, 1)),
+  #(5, AddressFormat(1, 2, 2)),
+  #(6, AddressFormat(1, 4, 1)),
+  #(7, AddressFormat(1, 4, 2)),
+  #(8, AddressFormat(1, 4, 3)),
+  #(9, AddressFormat(1, 4, 4)),
+  #(10, AddressFormat(1, 8, 1)),
+  #(11, AddressFormat(1, 8, 2)),
+  #(12, AddressFormat(1, 8, 3)),
+  #(13, AddressFormat(1, 8, 4)),
+  #(14, AddressFormat(1, 8, 5)),
+  #(15, AddressFormat(1, 8, 6)),
+  #(16, AddressFormat(1, 8, 7)),
+  #(17, AddressFormat(1, 8, 8)),
+  #(35, AddressFormat(1, 32, 2)),
+]
+
+type AddressFormat {
+  AddressFormat(prefix_l: Int, pubkey_l: Int, checksum_l: Int)
+}
 
 pub opaque type Address {
   Address(address_type: Int, pubkey: BitArray, checksum: BitArray)
@@ -30,26 +47,22 @@ pub fn from_string(
   use decoded <- result.try(
     crypto.b58_decode(address) |> result.replace_error(InvalidCharacter),
   )
-  let found_bit_size = bit_array.bit_size(decoded)
-  use <- bool.guard(
-    found_bit_size != expected_address_byte_length * 8,
-    Error(InvalidLength(found_bit_size)),
+  let found_byte_size = bit_array.byte_size(decoded)
+
+  use address_format <- result.try(
+    dict.get(
+      dict.from_list(valid_addresses_formats_by_total_length),
+      found_byte_size,
+    )
+    |> result.replace_error(InvalidLength(found_byte_size)),
   )
 
   let assert Ok(prefix_bits) =
-    bit_array.slice(decoded, 0, expected_address_prefix_byte_length)
+    bit_array.slice(decoded, 0, address_format.prefix_l)
   let assert Ok(checksum) =
-    bit_array.slice(
-      decoded,
-      expected_address_byte_length,
-      -expected_address_checksum_suffix_byte_length,
-    )
+    bit_array.slice(decoded, found_byte_size, -address_format.checksum_l)
   let assert Ok(pubkey) =
-    bit_array.slice(
-      decoded,
-      expected_address_checksum_suffix_byte_length - 1,
-      expected_address_pubkey_byte_length,
-    )
+    bit_array.slice(decoded, address_format.prefix_l, address_format.pubkey_l)
 
   let assert Ok(computed_checksum) =
     crypto.blake2_512(<<
