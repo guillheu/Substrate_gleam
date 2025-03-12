@@ -34,16 +34,14 @@ pub opaque type Address {
   Address(address_type: Int, pubkey: BitArray, checksum: BitArray)
 }
 
-pub type AddressDecodingError {
+pub type AddressError {
   InvalidCharacter
   InvalidLength(Int)
   InvalidChecksum(expected: BitArray, found: BitArray)
   InvalidPrefix(Int)
 }
 
-pub fn from_string(
-  address address: String,
-) -> Result(Address, AddressDecodingError) {
+pub fn from_string(address address: String) -> Result(Address, AddressError) {
   use decoded <- result.try(
     crypto.b58_decode(address) |> result.replace_error(InvalidCharacter),
   )
@@ -59,25 +57,36 @@ pub fn from_string(
 
   let assert Ok(prefix_bits) =
     bit_array.slice(decoded, 0, address_format.prefix_l)
+  let prefix = do_decode_unsigned(prefix_bits)
   let assert Ok(checksum) =
     bit_array.slice(decoded, found_byte_size, -address_format.checksum_l)
   let assert Ok(pubkey) =
     bit_array.slice(decoded, address_format.prefix_l, address_format.pubkey_l)
 
-  let assert Ok(computed_checksum) =
-    crypto.blake2_512(<<
-      checksum_context_prefix:bits,
-      prefix_bits:bits,
-      pubkey:bits,
-    >>)
-    |> bit_array.slice(0, 2)
+  let computed_checksum = compute_checksum(prefix, pubkey)
 
   use <- bool.guard(
     computed_checksum != checksum,
     Error(InvalidChecksum(computed_checksum, checksum)),
   )
 
-  let prefix = do_decode_unsigned(prefix_bits)
+  Ok(Address(prefix, pubkey, checksum))
+}
+
+pub fn from_components(
+  address_type prefix: Int,
+  public_key pubkey: BitArray,
+) -> Result(Address, AddressError) {
+  let pubkey_size = bit_array.byte_size(pubkey)
+  use <- bool.guard(
+    pubkey_size != 1
+      && pubkey_size != 2
+      && pubkey_size != 4
+      && pubkey_size != 8
+      && pubkey_size != 32,
+    Error(InvalidLength(pubkey_size)),
+  )
+  let checksum = compute_checksum(prefix, pubkey)
   Ok(Address(prefix, pubkey, checksum))
 }
 
@@ -88,6 +97,13 @@ pub fn to_string(address address: Address) -> String {
 
 pub fn to_bit_array(address address: Address) -> BitArray {
   <<address.address_type, address.pubkey:bits, address.checksum:bits>>
+}
+
+fn compute_checksum(prefix: Int, pubkey: BitArray) -> BitArray {
+  let assert Ok(computed_checksum) =
+    crypto.blake2_512(<<checksum_context_prefix:bits, prefix, pubkey:bits>>)
+    |> bit_array.slice(0, 2)
+  computed_checksum
 }
 
 @external(erlang, "binary", "decode_unsigned")
