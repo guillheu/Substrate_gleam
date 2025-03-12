@@ -13,6 +13,10 @@ pub fn blake2(data: BitArray) -> BitArray {
   do_hash2b(data, substrate_blake2_output_bit_size / 8, <<>>)
 }
 
+pub fn blake2_512(data: BitArray) -> BitArray {
+  do_hash2b(data, 64, <<>>)
+}
+
 pub fn xxhash(data: BitArray) -> BitArray {
   <<
     do_xxh64(dynamic.from(data), substrate_xxhash_seed_round_1):little-size(64),
