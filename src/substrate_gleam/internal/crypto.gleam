@@ -1,5 +1,6 @@
 // Reference: https://www.shawntabrizi.com/blog/substrate/querying-substrate-storage-via-rpc/
 
+import base_x_gleam/base58
 import gleam/dynamic.{type Dynamic}
 
 const substrate_blake2_output_bit_size = 256
@@ -24,6 +25,14 @@ pub fn xxhash_from_string(data: String) -> BitArray {
     do_xxh64(dynamic.from(data), substrate_xxhash_seed_round_1):little-size(64),
     do_xxh64(dynamic.from(data), substrate_xxhash_seed_round_2):little-size(64),
   >>
+}
+
+pub fn b58_encode(input: BitArray) -> String {
+  base58.encode(input)
+}
+
+pub fn b58_decode(input: String) -> Result(BitArray, Nil) {
+  base58.decode(input)
 }
 
 // https://hexdocs.pm/blake2/Blake2.html#hash2b/3
